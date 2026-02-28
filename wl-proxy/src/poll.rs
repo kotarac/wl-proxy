@@ -31,8 +31,9 @@ pub(crate) const WRITABLE: u32 = c::EPOLLOUT as u32;
 pub(crate) const ERROR: u32 = (c::EPOLLERR | c::EPOLLHUP) as u32;
 
 const ONESHOT: u32 = c::EPOLLONESHOT as u32;
+const ET: u32 = c::EPOLLET as u32;
 
-const ALL: u32 = READABLE | WRITABLE | ERROR | ONESHOT;
+const ALL: u32 = READABLE | WRITABLE | ERROR | ONESHOT | ET;
 
 #[derive(Copy, Clone, Default)]
 pub(crate) struct PollEvent {
@@ -126,5 +127,25 @@ impl Poller {
             Some(&event),
         )
         .map_err(|e| PollError::Update(e.into()))
+    }
+
+    #[cfg_attr(not(test), expect(dead_code))]
+    pub(crate) fn register_edge_triggered(
+        &self,
+        id: u64,
+        fd: BorrowedFd<'_>,
+        events: u32,
+    ) -> Result<(), PollError> {
+        let event = c::epoll_event {
+            events: events | ET,
+            u64: id,
+        };
+        uapi::epoll_ctl(
+            self.epoll.as_raw_fd(),
+            c::EPOLL_CTL_ADD,
+            fd.as_raw_fd(),
+            Some(&event),
+        )
+        .map_err(|e| PollError::Add(e.into()))
     }
 }
