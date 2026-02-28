@@ -32,6 +32,9 @@ pub(crate) struct Endpoint {
     pub(crate) current_interest: Cell<u32>,
     pub(crate) desired_interest: Cell<u32>,
     pub(crate) interest_update_queued: Cell<bool>,
+    pub(crate) suspended: Cell<bool>,
+    pub(crate) desired_suspended: Cell<bool>,
+    pub(crate) unsuspend_queued: Cell<bool>,
     incoming: RefCell<InputState>,
 }
 
@@ -103,6 +106,9 @@ impl Endpoint {
             current_interest: Default::default(),
             desired_interest: Default::default(),
             interest_update_queued: Default::default(),
+            suspended: Default::default(),
+            desired_suspended: Default::default(),
+            unsuspend_queued: Default::default(),
             incoming: Default::default(),
         })
     }
@@ -128,6 +134,9 @@ impl Endpoint {
         let fds = &mut incoming.fds;
         let mut may_read_from_socket = true;
         loop {
+            if self.suspended.get() {
+                break;
+            }
             if let Some(client) = client
                 && client.destroyed.get()
             {

@@ -63,3 +63,28 @@ fn many() {
         assert!(seen_ids.contains(&(i as u64)));
     }
 }
+
+#[test]
+fn edge_trigger() {
+    let epoll = Poller::new().unwrap();
+    let (r, mut w) = pipe().unwrap();
+    let r: OwnedFd = r.into();
+    epoll
+        .register_edge_triggered(1, r.as_fd(), READABLE)
+        .unwrap();
+    let mut events = [PollEvent::default(); MAX_EVENTS];
+    let n = epoll.read_events(0, &mut events).unwrap();
+    assert_eq!(n, 0);
+    w.write_all(&[0]).unwrap();
+    let n = epoll.read_events(0, &mut events).unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(events[0].u64, 1);
+    let n = epoll.read_events(0, &mut events).unwrap();
+    assert_eq!(n, 0);
+    w.write_all(&[0]).unwrap();
+    let n = epoll.read_events(0, &mut events).unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(events[0].u64, 1);
+    let n = epoll.read_events(0, &mut events).unwrap();
+    assert_eq!(n, 0);
+}

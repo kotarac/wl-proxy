@@ -8,6 +8,7 @@ use {
         state::{EndpointWithClient, Pollable, State, StateError, StateErrorKind},
         utils::env::{WAYLAND_DISPLAY, WAYLAND_SOCKET, WL_PROXY_DEBUG, XDG_RUNTIME_DIR},
     },
+    linearize::Linearize,
     std::{
         cell::{Cell, RefCell},
         collections::HashMap,
@@ -36,6 +37,12 @@ enum Server {
     None,
     Fd(Rc<OwnedFd>),
     DisplayName(String),
+}
+
+#[derive(Copy, Clone, Linearize)]
+pub(crate) enum StaticPollableIds {
+    Server,
+    Unsuspend,
 }
 
 impl StateBuilder {
@@ -115,15 +122,14 @@ impl StateBuilder {
                 .map_err(|e| StateErrorKind::Connect(name.to_string(), e.into()))?;
             Some(Rc::new(socket.into()))
         };
-        const SERVER_ENDPOINT_ID: u64 = 0;
         let mut endpoints = HashMap::new();
         let mut server = None;
         if let Some(server_fd) = &server_fd {
-            let s = Endpoint::new(SERVER_ENDPOINT_ID, server_fd);
+            let s = Endpoint::new(StaticPollableIds::Server as u64, server_fd);
             s.idl.acquire();
             s.idl.acquire();
             endpoints.insert(
-                SERVER_ENDPOINT_ID,
+                StaticPollableIds::Server as u64,
                 Pollable::Endpoint(EndpointWithClient {
                     endpoint: s.clone(),
                     client: None,
@@ -131,6 +137,10 @@ impl StateBuilder {
             );
             server = Some(s);
         }
+        let unsuspend_fd = uapi::eventfd(0, c::EFD_CLOEXEC | c::EFD_NONBLOCK)
+            .map(Into::into)
+            .map_err(|e| StateErrorKind::CreateEventfd(e.into()))?;
+        endpoints.insert(StaticPollableIds::Unsuspend as u64, Pollable::Unsuspend);
         let poller = Poller::new().map_err(StateErrorKind::PollError)?;
         #[cfg(feature = "logging")]
         let log_prefix = {
@@ -153,7 +163,7 @@ impl StateBuilder {
         let state = Rc::new(State {
             baseline: self.baseline,
             poller,
-            next_pollable_id: Cell::new(SERVER_ENDPOINT_ID + 1),
+            next_pollable_id: Cell::new(StaticPollableIds::LENGTH as u64),
             server,
             destroyed: Default::default(),
             handler: Default::default(),
@@ -185,12 +195,16 @@ impl StateBuilder {
             object_stash: Default::default(),
             forward_to_client: Cell::new(true),
             forward_to_server: Cell::new(true),
+            unsuspend_fd,
+            unsuspend_requests: Default::default(),
+            has_unsuspend_requests: Default::default(),
+            unsuspend_triggered: Default::default(),
         });
         if let Some(server) = &state.server {
             state.change_interest(server, |i| i | poll::READABLE);
             state
                 .poller
-                .register(0, server.socket.as_fd())
+                .register(server.id, server.socket.as_fd())
                 .map_err(StateErrorKind::PollError)?;
             let display = WlDisplay::new(&state, 1);
             display
@@ -198,6 +212,14 @@ impl StateBuilder {
                 .set_server_id_unchecked(1, display.clone())
                 .unwrap();
         }
+        state
+            .poller
+            .register_edge_triggered(
+                StaticPollableIds::Unsuspend as u64,
+                state.unsuspend_fd.as_fd(),
+                poll::READABLE,
+            )
+            .map_err(StateErrorKind::PollError)?;
         Ok(state)
     }
 

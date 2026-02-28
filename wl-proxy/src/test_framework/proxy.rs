@@ -23,17 +23,20 @@ use {
 };
 
 pub struct TestProxy {
+    pub log: bool,
     pub _proxy_destructor: Destructor,
-    pub _client_destructor: Destructor,
-
     pub proxy_state: Rc<State>,
+    pub client: TestProxyClient,
+}
+
+pub struct TestProxyClient {
+    pub _destructor: Destructor,
     pub proxy_client: Rc<Client>,
     pub proxy_test: Rc<WlproxyTest>,
-
-    pub client_state: Rc<State>,
-    pub client_display: Rc<WlDisplay>,
-    pub client_test: Rc<WlproxyTest>,
-    pub client_fd: Rc<OwnedFd>,
+    pub state: Rc<State>,
+    pub display: Rc<WlDisplay>,
+    pub test: Rc<WlproxyTest>,
+    pub fd: Rc<OwnedFd>,
 }
 
 pub fn test_proxy() -> TestProxy {
@@ -54,6 +57,16 @@ fn test_proxy_(log: bool) -> TestProxy {
         .with_log_prefix("proxy ")
         .build()
         .unwrap();
+    let client = test_proxy_client(&proxy_state, log);
+    TestProxy {
+        log,
+        _proxy_destructor: proxy_state.create_destructor(),
+        proxy_state,
+        client,
+    }
+}
+
+fn test_proxy_client(proxy_state: &Rc<State>, log: bool) -> TestProxyClient {
     let (client, client_fd) = proxy_state.connect().unwrap();
     struct Handler(Rc<RefCell<Option<Rc<WlproxyTest>>>>);
     impl WlDisplayHandler for Handler {
@@ -88,16 +101,14 @@ fn test_proxy_(log: bool) -> TestProxy {
         }
         dispatch_blocking([&client_state, &proxy_state]).unwrap();
     };
-    TestProxy {
-        _proxy_destructor: proxy_state.create_destructor(),
-        _client_destructor: client_state.create_destructor(),
-        proxy_state,
+    TestProxyClient {
+        _destructor: client_state.create_destructor(),
         proxy_client: client,
-        client_display,
-        client_state,
+        display: client_display,
+        state: client_state,
         proxy_test,
-        client_test,
-        client_fd,
+        test: client_test,
+        fd: client_fd,
     }
 }
 
@@ -123,7 +134,7 @@ pub fn dispatch_blocking<const N: usize>(states: [&Rc<State>; N]) -> Result<(), 
 
 impl TestProxy {
     pub fn sync(&self) {
-        let wl_callback = self.client_display.new_send_sync();
+        let wl_callback = self.client.display.new_send_sync();
         struct CallbackHandler {
             done: bool,
         }
@@ -139,7 +150,7 @@ impl TestProxy {
     }
 
     pub fn dispatch_blocking(&self) {
-        dispatch_blocking([&self.client_state, &self.proxy_state]).unwrap();
+        dispatch_blocking([&self.client.state, &self.proxy_state]).unwrap();
     }
 
     pub fn await_client_disconnected(&self) {
@@ -150,10 +161,16 @@ impl TestProxy {
             }
         }
         let disconnected = Rc::new(Cell::new(false));
-        self.proxy_client.set_handler(H(disconnected.clone()));
+        self.client
+            .proxy_client
+            .set_handler(H(disconnected.clone()));
         assert!(!disconnected.get());
         while !disconnected.get() {
             self.dispatch_blocking();
         }
+    }
+
+    pub fn create_client(&self) -> TestProxyClient {
+        test_proxy_client(&self.proxy_state, self.log)
     }
 }

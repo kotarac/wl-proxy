@@ -17,7 +17,8 @@ fn test() {
     let tp = test_proxy();
     {
         let mut outgoing = tp
-            .client_state
+            .client
+            .state
             .server
             .as_ref()
             .unwrap()
@@ -25,15 +26,15 @@ fn test() {
             .borrow_mut();
         outgoing.formatter().words([1, !0]);
     }
-    tp.client_display.new_send_sync();
+    tp.client.display.new_send_sync();
     tp.await_client_disconnected();
 }
 
 #[test]
 fn lookup() {
     let tp = test_proxy();
-    let dummy = tp.client_test.new_send_create_dummy();
-    let echo = tp.client_test.new_send_echo_object(dummy.clone());
+    let dummy = tp.client.test.new_send_create_dummy();
+    let echo = tp.client.test.new_send_echo_object(dummy.clone());
 
     struct H(Option<Rc<dyn Object>>);
     impl WlproxyTestObjectEchoHandler for H {
@@ -61,19 +62,22 @@ fn dispatch_destroyed() {
     }
 
     let tp = test_proxy();
-    tp.proxy_test.set_handler(H(tp.proxy_client.clone(), 0));
-    tp.client_test.new_send_create_dummy();
-    tp.client_test.new_send_create_dummy();
+    tp.client
+        .proxy_test
+        .set_handler(H(tp.client.proxy_client.clone(), 0));
+    tp.client.test.new_send_create_dummy();
+    tp.client.test.new_send_create_dummy();
 
     tp.dispatch_blocking();
 
-    assert_eq!(tp.proxy_test.get_handler_mut::<H>().1, 1);
+    assert_eq!(tp.client.proxy_test.get_handler_mut::<H>().1, 1);
 }
 
 #[test]
 fn invalid_message() {
     let tp = test_proxy();
-    tp.client_state
+    tp.client
+        .state
         .server
         .as_ref()
         .unwrap()
@@ -81,6 +85,6 @@ fn invalid_message() {
         .borrow_mut()
         .formatter()
         .words([1, !0u16 as u32]);
-    tp.client_display.new_send_sync();
+    tp.client.display.new_send_sync();
     tp.await_client_disconnected();
 }

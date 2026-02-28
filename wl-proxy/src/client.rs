@@ -86,4 +86,18 @@ impl Client {
         self.handler.set(None);
         self.state.remove_endpoint(&self.endpoint);
     }
+
+    /// Suspends or unsuspends dispatching messages from the client.
+    ///
+    /// Suspending takes effect immediately. That is, if this is called from within a
+    /// message handler, no further messages from the client will be dispatched until it
+    /// is unsuspended.
+    ///
+    /// This can be useful in situations where one clients needs to synchronize with
+    /// another. For example, when a client sends `wl_surface.commit` and another client
+    /// needs to take some action before the commit is forwarded to the server.
+    pub fn set_suspended(self: &Rc<Self>, suspended: bool) {
+        self.state
+            .set_endpoint_suspended(&self.endpoint, Some(self), suspended);
+    }
 }
