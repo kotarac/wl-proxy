@@ -436,7 +436,7 @@ fn test_forward_bind() {
     events.clear();
 
     // Bind to it
-    let obj = proxy.client_display.clone() as Rc<dyn Object>;
+    let obj = proxy.client.display.clone() as Rc<dyn Object>;
     mapper.forward_bind_impl(&RefCell::new(&mut events), 1, &obj);
     assert_eq!(
         events.pop_front(),
@@ -460,7 +460,7 @@ fn test_try_forward_bind() {
     events.clear();
 
     // Bind to it
-    let obj = proxy.client_display.clone() as Rc<dyn Object>;
+    let obj = proxy.client.display.clone() as Rc<dyn Object>;
     mapper
         .try_forward_bind_impl(&RefCell::new(&mut events), 1, &obj)
         .unwrap();
@@ -478,7 +478,7 @@ fn test_forward_bind_nonexistent() {
     let mut mapper = GlobalMapper::default();
 
     // Try to bind to a global that doesn't exist - should not panic
-    let obj = proxy.client_display.clone() as Rc<dyn Object>;
+    let obj = proxy.client.display.clone() as Rc<dyn Object>;
     mapper.forward_bind_impl(&registry, 999, &obj);
     assert_eq!(events.pop_front(), None);
 }
@@ -491,7 +491,7 @@ fn test_try_forward_bind_nonexistent() {
     let mut mapper = GlobalMapper::default();
 
     // Try to bind to a global that doesn't exist - should succeed
-    let obj = proxy.client_display.clone() as Rc<dyn Object>;
+    let obj = proxy.client.display.clone() as Rc<dyn Object>;
     mapper.try_forward_bind_impl(&registry, 999, &obj).unwrap();
     assert_eq!(events.pop_front(), None);
 }
@@ -508,7 +508,7 @@ fn test_forward_bind_synthetic() {
     events.clear();
 
     // Try to bind to it - should not forward to server
-    let obj = proxy.client_display.clone() as Rc<dyn Object>;
+    let obj = proxy.client.display.clone() as Rc<dyn Object>;
     mapper.forward_bind_impl(&RefCell::new(&mut events), name, &obj);
     assert_eq!(events.pop_front(), None);
 }
@@ -525,7 +525,7 @@ fn test_try_forward_bind_synthetic() {
     events.clear();
 
     // Try to bind to it - should not forward to server
-    let obj = proxy.client_display.clone() as Rc<dyn Object>;
+    let obj = proxy.client.display.clone() as Rc<dyn Object>;
     mapper
         .try_forward_bind_impl(&RefCell::new(&mut events), name, &obj)
         .unwrap();
@@ -547,7 +547,7 @@ fn test_try_forward_bind_error() {
     registry.fail_bind = true;
     let registry = RefCell::new(registry);
 
-    let obj = proxy.client_display.clone() as Rc<dyn Object>;
+    let obj = proxy.client.display.clone() as Rc<dyn Object>;
     let result = mapper.try_forward_bind_impl(&registry, 1, &obj);
     assert!(result.is_err());
 }
@@ -568,6 +568,6 @@ fn test_forward_bind_error() {
     let registry = RefCell::new(registry);
 
     // Should not panic on error
-    let obj = proxy.client_display.clone() as Rc<dyn Object>;
+    let obj = proxy.client.display.clone() as Rc<dyn Object>;
     mapper.forward_bind_impl(&registry, 1, &obj);
 }

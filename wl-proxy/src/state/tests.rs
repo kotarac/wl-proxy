@@ -91,7 +91,7 @@ fn destroyed_readable() {
 #[test]
 fn add_client() {
     let tp = test_proxy();
-    tp.proxy_client.disconnect();
+    tp.client.proxy_client.disconnect();
 }
 
 #[test]
@@ -135,15 +135,15 @@ fn acceptor() {
 #[test]
 fn closed_client() {
     let tp = test_proxy();
-    tp.client_display.new_send_sync();
-    uapi::shutdown(tp.client_fd.as_raw_fd(), c::SHUT_RD).unwrap();
+    tp.client.display.new_send_sync();
+    uapi::shutdown(tp.client.fd.as_raw_fd(), c::SHUT_RD).unwrap();
     tp.await_client_disconnected();
 }
 
 #[test]
 fn many_events() {
     let tp = test_proxy_no_log();
-    tp.client_test.send_send_many_events();
+    tp.client.test.send_send_many_events();
     tp.sync();
 }
 
@@ -170,8 +170,8 @@ fn count_hops() {
     }
 
     let tp = test_proxy_no_log();
-    tp.proxy_test.set_handler(Handler);
-    let hops = tp.client_test.new_send_count_hops();
+    tp.client.proxy_test.set_handler(Handler);
+    let hops = tp.client.test.new_send_count_hops();
     hops.set_handler(ClientHandler);
     tp.sync();
 }
@@ -188,11 +188,12 @@ fn recursive_dispatch() {
     }
 
     let tp = test_proxy();
-    tp.proxy_client
+    tp.client
+        .proxy_client
         .display()
         .set_handler(H(tp.proxy_state.clone(), false));
     tp.sync();
-    assert!(tp.proxy_client.display().get_handler_mut::<H>().1);
+    assert!(tp.client.proxy_client.display().get_handler_mut::<H>().1);
 }
 
 #[test]
@@ -216,14 +217,16 @@ fn display_error() {
 
     let tp = test_proxy();
     let saw_error = Rc::new(Cell::new(false));
-    tp.client_state
-        .set_handler(H(tp.client_test.clone(), saw_error.clone()));
-    tp.proxy_client
+    tp.client
+        .state
+        .set_handler(H(tp.client.test.clone(), saw_error.clone()));
+    tp.client
+        .proxy_client
         .display
-        .send_error(tp.proxy_test.clone(), 2, "abcd");
+        .send_error(tp.client.proxy_test.clone(), 2, "abcd");
     assert!(!saw_error.get());
     while !saw_error.get() {
-        if let Err(e) = dispatch_blocking([&tp.proxy_state, &tp.client_state]) {
+        if let Err(e) = dispatch_blocking([&tp.proxy_state, &tp.client.state]) {
             eprintln!("{}", Report::new(e));
         }
     }

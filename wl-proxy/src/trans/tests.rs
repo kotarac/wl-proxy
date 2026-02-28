@@ -18,7 +18,8 @@ fn weird_message_size(size: u16) {
     let tp = test_proxy();
     {
         let mut outgoing = tp
-            .client_state
+            .client
+            .state
             .server
             .as_ref()
             .unwrap()
@@ -31,7 +32,7 @@ fn weird_message_size(size: u16) {
         buf.valid_to_byte = 8;
         outgoing.pending.push_back(buf);
     }
-    tp.client_display.new_send_sync();
+    tp.client.display.new_send_sync();
     tp.await_client_disconnected();
 }
 
@@ -55,9 +56,9 @@ fn edge_header() {
     let tp = test_proxy_no_log();
     tp.sync();
     let array = [0u8; MAX_MESSAGE_SIZE - (HEADER_SIZE + 4 + 4 + 4)];
-    tp.client_test.new_send_echo_array(&array);
-    tp.client_test.new_send_echo_array(&array);
-    tp.client_test.new_send_echo_array(&[0u8; 4]);
+    tp.client.test.new_send_echo_array(&array);
+    tp.client.test.new_send_echo_array(&array);
+    tp.client.test.new_send_echo_array(&[0u8; 4]);
     tp.sync();
 }
 
@@ -65,8 +66,8 @@ fn edge_header() {
 fn fd() {
     let tp = test_proxy();
     let pool = Rc::new(uapi::memfd_create("", 0).unwrap().into());
-    tp.client_test.send_recv_fd(&pool);
-    tp.client_test.send_recv_fd(&pool);
+    tp.client.test.send_recv_fd(&pool);
+    tp.client.test.send_recv_fd(&pool);
     tp.sync();
 }
 
@@ -74,7 +75,7 @@ fn fd() {
 fn many_messages() {
     let tp = test_proxy_no_log();
     for _ in 0..100_000 {
-        tp.client_display.new_send_sync();
+        tp.client.display.new_send_sync();
     }
     tp.sync();
     tp.sync();
@@ -86,9 +87,9 @@ fn many_messages_with_fd() {
     let pool = Rc::new(uapi::memfd_create("", 0).unwrap().into());
     for _ in 0..1_000 {
         for _ in 0..100 {
-            tp.client_display.new_send_sync();
+            tp.client.display.new_send_sync();
         }
-        tp.client_test.send_recv_fd(&pool);
+        tp.client.test.send_recv_fd(&pool);
     }
     tp.sync();
     tp.sync();
@@ -113,7 +114,7 @@ fn array() {
         }
     }
     for array in ARRAYS {
-        let ewh = tp.client_test.new_send_echo_array(array);
+        let ewh = tp.client.test.new_send_echo_array(array);
         ewh.set_handler(Handler(array, false));
         tp.sync();
         assert!(ewh.get_handler_mut::<Handler>().1);
@@ -148,7 +149,7 @@ fn echo_fd() {
             self.2 = true;
         }
     }
-    let echo = tp.client_test.new_send_echo_fd(&fd1, &fd2);
+    let echo = tp.client.test.new_send_echo_fd(&fd1, &fd2);
     echo.set_handler(Handler(fd1, fd2, false));
     tp.sync();
     assert!(echo.get_handler_mut::<Handler>().2);

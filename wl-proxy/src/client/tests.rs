@@ -3,7 +3,7 @@ use {
         client::ClientHandler,
         object::ObjectCoreApi,
         protocols::ObjectInterface,
-        test_framework::proxy::{TestProxy, dispatch_blocking, test_proxy},
+        test_framework::proxy::{TestProxy, TestProxyClient, dispatch_blocking, test_proxy},
     },
     std::{cell::Cell, rc::Rc},
 };
@@ -12,17 +12,21 @@ use {
 fn disconnected() {
     let TestProxy {
         _proxy_destructor,
-        _client_destructor,
         proxy_state,
-        proxy_client,
-        proxy_test: _proxy_test,
-        client_state,
-        client_display,
-        client_test,
-        client_fd,
+        client:
+            TestProxyClient {
+                _destructor: client_destructor,
+                proxy_client,
+                proxy_test: _proxy_test,
+                state: client_state,
+                display: client_display,
+                test: client_test,
+                fd: client_fd,
+            },
+        ..
     } = test_proxy();
 
-    drop(_client_destructor);
+    drop(client_destructor);
     drop(client_state);
     drop(client_display);
     drop(client_test);
@@ -64,10 +68,10 @@ fn unset_handler() {
     }
     let dropped = Rc::new(Cell::new(false));
     let tp = test_proxy();
-    tp.proxy_client.set_handler(H2(dropped.clone()));
+    tp.client.proxy_client.set_handler(H2(dropped.clone()));
 
     assert!(!dropped.get());
-    tp.proxy_client.unset_handler();
+    tp.client.proxy_client.unset_handler();
     assert!(dropped.get());
 }
 
@@ -75,7 +79,7 @@ fn unset_handler() {
 fn objects() {
     let tp = test_proxy();
     let mut objects = vec![];
-    tp.proxy_client.objects(&mut objects);
+    tp.client.proxy_client.objects(&mut objects);
     assert_eq!(objects.len(), 3);
     let mut has_display = false;
     let mut has_registry = false;
@@ -94,7 +98,7 @@ fn objects() {
     assert!(has_test);
 
     let mut objects = vec![];
-    tp.proxy_client.disconnect();
-    tp.proxy_client.objects(&mut objects);
+    tp.client.proxy_client.disconnect();
+    tp.client.proxy_client.objects(&mut objects);
     assert_eq!(objects.len(), 0);
 }
