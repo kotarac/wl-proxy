@@ -23,7 +23,7 @@ use {
         cell::{Cell, RefCell},
         collections::HashMap,
         io::{self, pipe},
-        os::fd::{AsFd, OwnedFd},
+        os::fd::{AsFd, AsRawFd, OwnedFd},
         rc::{Rc, Weak},
         sync::{
             Arc,
@@ -91,6 +91,8 @@ enum StateErrorKind {
     WaylandSocketSetFd(#[source] io::Error),
     #[error(transparent)]
     PollError(PollError),
+    #[error("Could not create an eventfd")]
+    CreateEventfd(#[source] io::Error),
 }
 
 /// The proxy state.
@@ -177,6 +179,10 @@ pub struct State {
     pub(crate) object_stash: Stash<Rc<dyn Object>>,
     pub(crate) forward_to_client: Cell<bool>,
     pub(crate) forward_to_server: Cell<bool>,
+    unsuspend_fd: OwnedFd,
+    unsuspend_requests: Stack<EndpointWithClient>,
+    has_unsuspend_requests: Cell<bool>,
+    unsuspend_triggered: Cell<bool>,
 }
 
 /// A handler for events emitted by a [`State`].
@@ -213,6 +219,7 @@ enum Pollable {
     Endpoint(EndpointWithClient),
     Acceptor(Rc<Acceptor>),
     Destructor(OwnedFd, Arc<AtomicBool>),
+    Unsuspend,
 }
 
 #[derive(Clone)]
@@ -302,6 +309,24 @@ impl State {
         Ok(true)
     }
 
+    fn unsuspend_endpoints(self: &Rc<Self>, _lock: &HandlerLock<'_>) -> Result<(), StateError> {
+        if !self.has_unsuspend_requests.get() {
+            return Ok(());
+        }
+        self.check_destroyed()?;
+        while let Some(ewc) = self.unsuspend_requests.pop() {
+            ewc.endpoint.unsuspend_queued.set(false);
+            if ewc.endpoint.desired_suspended.get() {
+                continue;
+            }
+            ewc.endpoint.suspended.set(false);
+            self.readable_endpoints.push(ewc);
+            self.has_readable_endpoints.set(true);
+        }
+        self.has_unsuspend_requests.set(false);
+        Ok(())
+    }
+
     fn accept_connections(self: &Rc<Self>, lock: &HandlerLock<'_>) -> Result<bool, StateError> {
         if !self.has_acceptable_acceptors.get() {
             return Ok(false);
@@ -346,10 +371,48 @@ impl State {
                     return Err(StateErrorKind::DispatchEvents(e).into());
                 }
             }
-            self.change_interest(&ewc.endpoint, |i| i | poll::READABLE);
+            if !ewc.endpoint.suspended.get() {
+                self.change_interest(&ewc.endpoint, |i| i | poll::READABLE);
+            }
         }
         self.has_readable_endpoints.set(false);
         Ok(true)
+    }
+
+    pub(crate) fn set_endpoint_suspended(
+        &self,
+        endpoint: &Rc<Endpoint>,
+        client: Option<&Rc<Client>>,
+        suspended: bool,
+    ) {
+        if self.destroyed.get() {
+            return;
+        }
+        if suspended {
+            endpoint.suspended.set(true);
+            endpoint.desired_suspended.set(true);
+            return;
+        }
+        endpoint.desired_suspended.set(false);
+        if endpoint.unsuspend_queued.get() {
+            return;
+        }
+        if !self.unsuspend_triggered.get() {
+            if let Err(e) = uapi::eventfd_write(self.unsuspend_fd.as_raw_fd(), 1) {
+                log::error!(
+                    "Could not write to eventfd: {}",
+                    Report::new(io::Error::from(e)),
+                );
+                self.destroy();
+                return;
+            }
+            self.unsuspend_triggered.set(true);
+        }
+        self.unsuspend_requests.push(EndpointWithClient {
+            endpoint: endpoint.clone(),
+            client: client.cloned(),
+        });
+        endpoint.unsuspend_queued.set(true);
     }
 
     fn change_interest(&self, endpoint: &Rc<Endpoint>, f: impl FnOnce(u32) -> u32) {
@@ -434,6 +497,10 @@ impl State {
                         if destroy {
                             return Err(StateErrorKind::RemoteDestroyed.into());
                         }
+                    }
+                    Pollable::Unsuspend => {
+                        self.has_unsuspend_requests.set(true);
+                        self.unsuspend_triggered.set(false);
                     }
                 }
             }
@@ -561,11 +628,21 @@ impl State {
             did_work |= self.flush_locked(&lock)?;
         }
         self.wait_for_work(&lock, timeout)?;
+        self.unsuspend_endpoints(&lock)?;
         did_work |= self.accept_connections(&lock)?;
         did_work |= self.read_messages(&lock)?;
         did_work |= self.flush_locked(&lock)?;
         destroy_on_error.forget();
         Ok(did_work)
+    }
+
+    /// Suspends or unsuspends dispatching messages from the server.
+    ///
+    /// See also [`Client::set_suspended`].
+    pub fn set_suspended(&self, suspended: bool) {
+        if let Some(endpoint) = &self.server {
+            self.set_endpoint_suspended(endpoint, None, suspended);
+        }
     }
 }
 
@@ -832,6 +909,7 @@ impl State {
                 }
                 Pollable::Acceptor(a) => &a.socket,
                 Pollable::Destructor(fd, _) => fd,
+                Pollable::Unsuspend => &self.unsuspend_fd,
             };
             self.poller.unregister(fd.as_fd());
         }
@@ -853,6 +931,7 @@ impl State {
         self.flushable_endpoints.take();
         self.interest_update_endpoints.take();
         self.interest_update_acceptors.take();
+        self.unsuspend_requests.take();
         self.all_objects.borrow_mut().clear();
         // Ensure that the poll fd stays permanently readable.
         let _ = self.create_remote_destructor();

@@ -42,6 +42,7 @@ enum Server {
 #[derive(Copy, Clone, Linearize)]
 pub(crate) enum StaticPollableIds {
     Server,
+    Unsuspend,
 }
 
 impl StateBuilder {
@@ -136,6 +137,10 @@ impl StateBuilder {
             );
             server = Some(s);
         }
+        let unsuspend_fd = uapi::eventfd(0, c::EFD_CLOEXEC | c::EFD_NONBLOCK)
+            .map(Into::into)
+            .map_err(|e| StateErrorKind::CreateEventfd(e.into()))?;
+        endpoints.insert(StaticPollableIds::Unsuspend as u64, Pollable::Unsuspend);
         let poller = Poller::new().map_err(StateErrorKind::PollError)?;
         #[cfg(feature = "logging")]
         let log_prefix = {
@@ -190,6 +195,10 @@ impl StateBuilder {
             object_stash: Default::default(),
             forward_to_client: Cell::new(true),
             forward_to_server: Cell::new(true),
+            unsuspend_fd,
+            unsuspend_requests: Default::default(),
+            has_unsuspend_requests: Default::default(),
+            unsuspend_triggered: Default::default(),
         });
         if let Some(server) = &state.server {
             state.change_interest(server, |i| i | poll::READABLE);
@@ -203,6 +212,14 @@ impl StateBuilder {
                 .set_server_id_unchecked(1, display.clone())
                 .unwrap();
         }
+        state
+            .poller
+            .register_edge_triggered(
+                StaticPollableIds::Unsuspend as u64,
+                state.unsuspend_fd.as_fd(),
+                poll::READABLE,
+            )
+            .map_err(StateErrorKind::PollError)?;
         Ok(state)
     }
 

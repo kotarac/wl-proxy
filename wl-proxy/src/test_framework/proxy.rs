@@ -170,7 +170,6 @@ impl TestProxy {
         }
     }
 
-    #[expect(dead_code)]
     pub fn create_client(&self) -> TestProxyClient {
         test_proxy_client(&self.proxy_state, self.log)
     }

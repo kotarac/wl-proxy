@@ -129,7 +129,6 @@ impl Poller {
         .map_err(|e| PollError::Update(e.into()))
     }
 
-    #[cfg_attr(not(test), expect(dead_code))]
     pub(crate) fn register_edge_triggered(
         &self,
         id: u64,
