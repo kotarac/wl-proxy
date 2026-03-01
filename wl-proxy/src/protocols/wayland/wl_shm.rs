@@ -221,6 +221,10 @@ impl WlShm {
     /// can be used for buffers. Known formats include
     /// argb8888 and xrgb8888.
     ///
+    /// Extensions to drm_fourcc.h (or the format enum) do not require
+    /// increasing the wl_shm version; as a result, clients may receive format
+    /// codes which were not in the list at the time the client was made.
+    ///
     /// # Arguments
     ///
     /// - `format`: buffer pixel format
@@ -271,6 +275,10 @@ impl WlShm {
     /// Informs the client about a valid pixel format that
     /// can be used for buffers. Known formats include
     /// argb8888 and xrgb8888.
+    ///
+    /// Extensions to drm_fourcc.h (or the format enum) do not require
+    /// increasing the wl_shm version; as a result, clients may receive format
+    /// codes which were not in the list at the time the client was made.
     ///
     /// # Arguments
     ///
@@ -400,6 +408,10 @@ pub trait WlShmHandler: Any {
     /// Informs the client about a valid pixel format that
     /// can be used for buffers. Known formats include
     /// argb8888 and xrgb8888.
+    ///
+    /// Extensions to drm_fourcc.h (or the format enum) do not require
+    /// increasing the wl_shm version; as a result, clients may receive format
+    /// codes which were not in the list at the time the client was made.
     ///
     /// # Arguments
     ///
@@ -956,7 +968,8 @@ impl Debug for WlShmError {
 ///
 /// The drm format codes match the macros defined in drm_fourcc.h, except
 /// argb8888 and xrgb8888. The formats actually supported by the compositor
-/// will be reported by the format event.
+/// will be reported by the format event. See drm_fourcc.h for more detailed
+/// format descriptions.
 ///
 /// For all wl_shm formats and unless specified in another protocol
 /// extension, pre-multiplied alpha is used for pixel values.
