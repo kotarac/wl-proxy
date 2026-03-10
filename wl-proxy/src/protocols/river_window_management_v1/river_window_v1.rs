@@ -2785,7 +2785,10 @@ impl RiverWindowV1 {
     /// the window requested to be fullscreen
     ///
     /// The xdg-shell protocol for example allows windows to request that they
-    /// be made fullscreen and allows them to provide an output preference.
+    /// be made fullscreen and allows them to provide an optional output hint.
+    ///
+    /// If the output argument is null, the window has no preference and the
+    /// window manager should choose an output.
     ///
     /// The window manager is free to honor this request using
     /// river_window_v1.fullscreen or ignore it.
@@ -2848,7 +2851,10 @@ impl RiverWindowV1 {
     /// the window requested to be fullscreen
     ///
     /// The xdg-shell protocol for example allows windows to request that they
-    /// be made fullscreen and allows them to provide an output preference.
+    /// be made fullscreen and allows them to provide an optional output hint.
+    ///
+    /// If the output argument is null, the window has no preference and the
+    /// window manager should choose an output.
     ///
     /// The window manager is free to honor this request using
     /// river_window_v1.fullscreen or ignore it.
@@ -5004,7 +5010,10 @@ pub trait RiverWindowV1Handler: Any {
     /// the window requested to be fullscreen
     ///
     /// The xdg-shell protocol for example allows windows to request that they
-    /// be made fullscreen and allows them to provide an output preference.
+    /// be made fullscreen and allows them to provide an optional output hint.
+    ///
+    /// If the output argument is null, the window has no preference and the
+    /// window manager should choose an output.
     ///
     /// The window manager is free to honor this request using
     /// river_window_v1.fullscreen or ignore it.
