@@ -19,7 +19,7 @@ struct DefaultHandler;
 impl WlFixesHandler for DefaultHandler { }
 
 impl ConcreteObject for WlFixes {
-    const XML_VERSION: u32 = 1;
+    const XML_VERSION: u32 = 2;
     const INTERFACE: ObjectInterface = ObjectInterface::WlFixes;
     const INTERFACE_NAME: &str = "wl_fixes";
 }
@@ -195,6 +195,133 @@ impl WlFixes {
             log_send("wl_fixes.destroy_registry", &e);
         }
     }
+
+    /// Since when the ack_global_remove message is available.
+    pub const MSG__ACK_GLOBAL_REMOVE__SINCE: u32 = 2;
+
+    /// acknowledge global removal
+    ///
+    /// Acknowledge the removal of the specified global.
+    ///
+    /// If no global with the specified name exists or the global is not removed,
+    /// the wl_fixes.invalid_ack_remove protocol error will be posted.
+    ///
+    /// Due to the Wayland protocol being asynchronous, the wl_global objects
+    /// cannot be destroyed immediately. For example, if a wl_global is removed
+    /// and a client attempts to bind that global around same time, it can
+    /// result in a protocol error due to an unknown global name in the bind
+    /// request.
+    ///
+    /// In order to avoid crashing clients, the compositor should remove the
+    /// wl_global once it is guaranteed that no more bind requests will come.
+    ///
+    /// The wl_fixes.ack_global_remove() request is used to signal to the
+    /// compositor that the client will not bind the given global anymore. After
+    /// all clients acknowledge the removal of the global, the compositor can
+    /// safely destroy it.
+    ///
+    /// The client must call the wl_fixes.ack_global_remove() request in
+    /// response to a wl_registry.global_remove() event even if it did not bind
+    /// the corresponding global.
+    ///
+    /// # Arguments
+    ///
+    /// - `registry`: the registry object
+    /// - `name`: unique name of the global
+    #[inline]
+    pub fn try_send_ack_global_remove(
+        &self,
+        registry: &Rc<WlRegistry>,
+        name: u32,
+    ) -> Result<(), ObjectError> {
+        let (
+            arg0,
+            arg1,
+        ) = (
+            registry,
+            name,
+        );
+        let arg0 = arg0.core();
+        let core = self.core();
+        let Some(id) = core.server_obj_id.get() else {
+            return Err(ObjectError(ObjectErrorKind::ReceiverNoServerId));
+        };
+        let arg0_id = match arg0.server_obj_id.get() {
+            None => return Err(ObjectError(ObjectErrorKind::ArgNoServerId("registry"))),
+            Some(id) => id,
+        };
+        #[cfg(feature = "logging")]
+        if self.core.state.log {
+            #[cold]
+            fn log(state: &State, id: u32, arg0: u32, arg1: u32) {
+                let (millis, micros) = time_since_epoch();
+                let prefix = &state.log_prefix;
+                let args = format_args!("[{millis:7}.{micros:03}] {prefix}server      <= wl_fixes#{}.ack_global_remove(registry: wl_registry#{}, name: {})\n", id, arg0, arg1);
+                state.log(args);
+            }
+            log(&self.core.state, id, arg0_id, arg1);
+        }
+        let Some(endpoint) = &self.core.state.server else {
+            return Ok(());
+        };
+        if !endpoint.flush_queued.replace(true) {
+            self.core.state.add_flushable_endpoint(endpoint, None);
+        }
+        let mut outgoing_ref = endpoint.outgoing.borrow_mut();
+        let outgoing = &mut *outgoing_ref;
+        let mut fmt = outgoing.formatter();
+        fmt.words([
+            id,
+            2,
+            arg0_id,
+            arg1,
+        ]);
+        Ok(())
+    }
+
+    /// acknowledge global removal
+    ///
+    /// Acknowledge the removal of the specified global.
+    ///
+    /// If no global with the specified name exists or the global is not removed,
+    /// the wl_fixes.invalid_ack_remove protocol error will be posted.
+    ///
+    /// Due to the Wayland protocol being asynchronous, the wl_global objects
+    /// cannot be destroyed immediately. For example, if a wl_global is removed
+    /// and a client attempts to bind that global around same time, it can
+    /// result in a protocol error due to an unknown global name in the bind
+    /// request.
+    ///
+    /// In order to avoid crashing clients, the compositor should remove the
+    /// wl_global once it is guaranteed that no more bind requests will come.
+    ///
+    /// The wl_fixes.ack_global_remove() request is used to signal to the
+    /// compositor that the client will not bind the given global anymore. After
+    /// all clients acknowledge the removal of the global, the compositor can
+    /// safely destroy it.
+    ///
+    /// The client must call the wl_fixes.ack_global_remove() request in
+    /// response to a wl_registry.global_remove() event even if it did not bind
+    /// the corresponding global.
+    ///
+    /// # Arguments
+    ///
+    /// - `registry`: the registry object
+    /// - `name`: unique name of the global
+    #[inline]
+    pub fn send_ack_global_remove(
+        &self,
+        registry: &Rc<WlRegistry>,
+        name: u32,
+    ) {
+        let res = self.try_send_ack_global_remove(
+            registry,
+            name,
+        );
+        if let Err(e) = res {
+            log_send("wl_fixes.ack_global_remove", &e);
+        }
+    }
 }
 
 /// A message handler for [`WlFixes`] proxies.
@@ -255,6 +382,57 @@ pub trait WlFixesHandler: Any {
         );
         if let Err(e) = res {
             log_forward("wl_fixes.destroy_registry", &e);
+        }
+    }
+
+    /// acknowledge global removal
+    ///
+    /// Acknowledge the removal of the specified global.
+    ///
+    /// If no global with the specified name exists or the global is not removed,
+    /// the wl_fixes.invalid_ack_remove protocol error will be posted.
+    ///
+    /// Due to the Wayland protocol being asynchronous, the wl_global objects
+    /// cannot be destroyed immediately. For example, if a wl_global is removed
+    /// and a client attempts to bind that global around same time, it can
+    /// result in a protocol error due to an unknown global name in the bind
+    /// request.
+    ///
+    /// In order to avoid crashing clients, the compositor should remove the
+    /// wl_global once it is guaranteed that no more bind requests will come.
+    ///
+    /// The wl_fixes.ack_global_remove() request is used to signal to the
+    /// compositor that the client will not bind the given global anymore. After
+    /// all clients acknowledge the removal of the global, the compositor can
+    /// safely destroy it.
+    ///
+    /// The client must call the wl_fixes.ack_global_remove() request in
+    /// response to a wl_registry.global_remove() event even if it did not bind
+    /// the corresponding global.
+    ///
+    /// # Arguments
+    ///
+    /// - `registry`: the registry object
+    /// - `name`: unique name of the global
+    ///
+    /// All borrowed proxies passed to this function are guaranteed to be
+    /// immutable and non-null.
+    #[inline]
+    fn handle_ack_global_remove(
+        &mut self,
+        slf: &Rc<WlFixes>,
+        registry: &Rc<WlRegistry>,
+        name: u32,
+    ) {
+        if !slf.core.forward_to_server.get() {
+            return;
+        }
+        let res = slf.try_send_ack_global_remove(
+            registry,
+            name,
+        );
+        if let Err(e) = res {
+            log_forward("wl_fixes.ack_global_remove", &e);
         }
     }
 }
@@ -340,6 +518,39 @@ impl ObjectPrivate for WlFixes {
                     DefaultHandler.handle_destroy_registry(&self, arg0);
                 }
             }
+            2 => {
+                let [
+                    arg0,
+                    arg1,
+                ] = msg[2..] else {
+                    return Err(ObjectError(ObjectErrorKind::WrongMessageSize(msg.len() as u32 * 4, 16)));
+                };
+                #[cfg(feature = "logging")]
+                if self.core.state.log {
+                    #[cold]
+                    fn log(state: &State, client_id: u64, id: u32, arg0: u32, arg1: u32) {
+                        let (millis, micros) = time_since_epoch();
+                        let prefix = &state.log_prefix;
+                        let args = format_args!("[{millis:7}.{micros:03}] {prefix}client#{:<4} -> wl_fixes#{}.ack_global_remove(registry: wl_registry#{}, name: {})\n", client_id, id, arg0, arg1);
+                        state.log(args);
+                    }
+                    log(&self.core.state, client.endpoint.id, msg[0], arg0, arg1);
+                }
+                let arg0_id = arg0;
+                let Some(arg0) = client.endpoint.lookup(arg0_id) else {
+                    return Err(ObjectError(ObjectErrorKind::NoClientObject(client.endpoint.id, arg0_id)));
+                };
+                let Ok(arg0) = (arg0 as Rc<dyn Any>).downcast::<WlRegistry>() else {
+                    let o = client.endpoint.lookup(arg0_id).unwrap();
+                    return Err(ObjectError(ObjectErrorKind::WrongObjectType("registry", o.core().interface, ObjectInterface::WlRegistry)));
+                };
+                let arg0 = &arg0;
+                if let Some(handler) = handler {
+                    (**handler).handle_ack_global_remove(&self, arg0, arg1);
+                } else {
+                    DefaultHandler.handle_ack_global_remove(&self, arg0, arg1);
+                }
+            }
             n => {
                 let _ = client;
                 let _ = msg;
@@ -371,6 +582,7 @@ impl ObjectPrivate for WlFixes {
         let name = match id {
             0 => "destroy",
             1 => "destroy_registry",
+            2 => "ack_global_remove",
             _ => return None,
         };
         Some(name)
@@ -408,3 +620,28 @@ impl Object for WlFixes {
     }
 }
 
+impl WlFixes {
+    /// Since when the error.invalid_ack_remove enum variant is available.
+    pub const ENM__ERROR_INVALID_ACK_REMOVE__SINCE: u32 = 1;
+}
+
+/// wl_fixes error values
+///
+/// These errors can be emitted in response to wl_fixes requests.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct WlFixesError(pub u32);
+
+impl WlFixesError {
+    /// unknown global or the global is not removed
+    pub const INVALID_ACK_REMOVE: Self = Self(0);
+}
+
+impl Debug for WlFixesError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = match *self {
+            Self::INVALID_ACK_REMOVE => "INVALID_ACK_REMOVE",
+            _ => return Debug::fmt(&self.0, f),
+        };
+        f.write_str(name)
+    }
+}

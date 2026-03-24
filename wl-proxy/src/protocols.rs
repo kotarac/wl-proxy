@@ -310,6 +310,7 @@ mod all_types {
     pub(super) use super::wayland::wl_display::WlDisplay;
     pub(super) use super::wayland::wl_display::WlDisplayError;
     pub(super) use super::wayland::wl_fixes::WlFixes;
+    pub(super) use super::wayland::wl_fixes::WlFixesError;
     pub(super) use super::wayland::wl_keyboard::WlKeyboard;
     pub(super) use super::wayland::wl_keyboard::WlKeyboardKeymapFormat;
     pub(super) use super::wayland::wl_keyboard::WlKeyboardKeyState;
@@ -5572,7 +5573,7 @@ impl ObjectInterface {
             Self::WlDataOffer => 4,
             Self::WlDataSource => 4,
             Self::WlDisplay => 1,
-            Self::WlFixes => 1,
+            Self::WlFixes => 2,
             Self::WlKeyboard => 10,
             Self::WlOutput => 4,
             Self::WlPointer => 10,
